@@ -1,0 +1,11 @@
+Screen {
+    align: center middle;
+}
+
+ListView {
+    scrollbar-gutter: stable;
+}
+
+ListView:focus {
+    border: solid $accent;
+}

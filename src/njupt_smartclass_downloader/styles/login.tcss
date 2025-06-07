@@ -1,0 +1,37 @@
+#login-container {
+    width: 60;
+    height: auto;
+    border: thick $primary;
+    background: $surface;
+    padding: 1;
+}
+
+#login-form {
+    width: 100%;
+    height: auto;
+    align: center middle;
+}
+
+.form-label {
+    margin-top: 1;
+    margin-bottom: 1;
+    text-style: bold;
+    color: $text;
+}
+
+.form-input {
+    width: 100%;
+    margin-bottom: 1;
+}
+
+#login-buttons {
+    width: 100%;
+    height: auto;
+    align: center middle;
+    margin-top: 1;
+}
+
+#login-buttons Button {
+    margin: 0 1;
+    min-width: 12;
+}

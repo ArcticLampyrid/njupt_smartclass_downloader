@@ -1,0 +1,31 @@
+#search-modal-container {
+    width: 60;
+    height: auto;
+    border: thick $primary;
+    background: $surface;
+    padding: 1;
+    align: center middle;
+
+    .modal-label {
+        margin-bottom: 1;
+        text-style: bold;
+        color: $text;
+    }
+
+    .modal-input {
+        width: 100%;
+        margin-bottom: 1;
+    }
+
+    #modal-buttons {
+        width: 100%;
+        height: auto;
+        align: center middle;
+        margin-top: 1;
+    }
+
+    #modal-buttons Button {
+        margin: 0 1;
+        width: 12;
+    }
+}

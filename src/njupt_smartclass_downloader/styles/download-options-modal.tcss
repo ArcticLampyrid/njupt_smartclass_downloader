@@ -1,0 +1,27 @@
+#download-options-modal-container {
+    width: 60;
+    height: auto;
+    max-height: 80vh;
+    border: thick $primary;
+    background: $surface;
+    padding: 1;
+    align: center middle;
+
+    .modal-title {
+        margin-bottom: 1;
+        text-style: bold;
+        color: $text;
+    }
+
+    #modal-buttons {
+        width: 100%;
+        height: auto;
+        align: center middle;
+        margin-top: 1;
+    }
+
+    #modal-buttons Button {
+        margin: 0 1;
+        width: 12;
+    }
+}

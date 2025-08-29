@@ -23,8 +23,5 @@ dependencies = [
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.poetry]
-packages = [{ include = "njupt_smartclass_downloader", from = "src" }]
-
-[tool.poetry.scripts]
+[project.scripts]
 njupt-smartclass-downloader = "njupt_smartclass_downloader.__main__:main"

@@ -9,8 +9,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Generator, List, Literal, Optional, Protocol, Tuple
-from urllib import request
+from typing import Callable, Generator, List, Optional, Tuple
 from lxml import etree
 import requests
 from urllib.parse import urljoin
@@ -38,6 +37,108 @@ POOL_WORKER_COUNT = {
     PoolKind.DOWNLOAD: 4,
     PoolKind.EXTRACT_SLIDES: 4,
 }
+
+
+def download_file_with_retry(
+    url: str,
+    dest_path: str,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+    max_retries: int = 10,
+    initial_timeout: float = 1.0,
+    max_timeout: float = 300.0,
+) -> None:
+    """
+    Download a file with retry and resume support using exponential backoff.
+
+    Args:
+        url: URL to download from
+        dest_path: Destination file path (will use .part suffix during download)
+        progress_callback: Optional callback(bytes_downloaded, total_bytes)
+        max_retries: Maximum number of retry attempts
+        initial_timeout: Initial timeout in seconds for exponential backoff
+        max_timeout: Maximum timeout in seconds
+    """
+    part_path = dest_path + ".part"
+    retry_count = 0
+    timeout = initial_timeout
+
+    while retry_count <= max_retries:
+        try:
+            # Check if partial file exists
+            start_byte = 0
+            if os.path.exists(part_path):
+                start_byte = os.path.getsize(part_path)
+
+            # Prepare request with Range header for resume support
+            headers = {}
+            if start_byte > 0:
+                headers["Range"] = f"bytes={start_byte}-"
+
+            response = requests.get(url, headers=headers, stream=True, timeout=30)
+
+            # Handle response codes
+            if response.status_code == 416:
+                # Range not satisfiable - file already complete
+                if os.path.exists(part_path):
+                    os.rename(part_path, dest_path)
+                return
+            elif response.status_code not in (200, 206):
+                response.raise_for_status()
+
+            # Get total file size
+            if response.status_code == 206:
+                # Partial content - parse Content-Range header
+                content_range = response.headers.get("Content-Range", "")
+                if content_range:
+                    total_size = int(content_range.split("/")[-1])
+                else:
+                    total_size = start_byte + int(
+                        response.headers.get("Content-Length", 0)
+                    )
+            else:
+                # Full content
+                total_size = int(response.headers.get("Content-Length", 0))
+                # If we have a partial file but server doesn't support range, start over
+                if start_byte > 0:
+                    start_byte = 0
+                    if os.path.exists(part_path):
+                        os.remove(part_path)
+
+            # Download the file
+            mode = "ab" if start_byte > 0 and response.status_code == 206 else "wb"
+            downloaded_bytes = start_byte
+
+            with open(part_path, mode) as f:
+                chunk_size = 8192
+                for chunk in response.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded_bytes += len(chunk)
+
+                        # Check if we've made progress since last retry
+                        if len(chunk) > 0:
+                            # Reset timeout on progress
+                            timeout = initial_timeout
+                            retry_count = 0
+
+                        # Report progress
+                        if progress_callback and total_size > 0:
+                            progress_callback(downloaded_bytes, total_size)
+
+            # Download completed successfully
+            os.rename(part_path, dest_path)
+            return
+
+        except (requests.RequestException, IOError, OSError) as e:
+            retry_count += 1
+
+            if retry_count > max_retries:
+                # Max retries exceeded
+                raise RuntimeError(f"Download failed after {max_retries} retries: {e}")
+            else:
+                # Wait before retrying
+                time.sleep(timeout)
+                timeout = min(timeout * 2, max_timeout)
 
 
 class TaskReporter:
@@ -172,18 +273,14 @@ class DownloadTask(Task):
         os.makedirs(os.path.dirname(self.local_path), exist_ok=True)
 
         if not os.path.exists(self.local_path):
-            if os.path.exists(self.local_path + ".part"):
-                os.remove(self.local_path + ".part")
 
-            def reporthook(block_num: int, block_size: int, total_size: int) -> None:
-                if total_size > 0:
-                    downloaded = block_num * block_size
-                    progress = downloaded / total_size
-                    reporter.report_progress(step_progress=progress)
+            def progress_callback(downloaded: int, total: int) -> None:
+                progress = downloaded / total if total > 0 else 0
+                reporter.report_progress(step_progress=progress)
 
-            request.urlretrieve(self.remote_url, self.local_path + ".part", reporthook)
-
-            os.rename(self.local_path + ".part", self.local_path)
+            download_file_with_retry(
+                self.remote_url, self.local_path, progress_callback=progress_callback
+            )
 
         if self.video_type == "VGA" and self.options.extract_slides:
             # If it's VGA video, extract slides
